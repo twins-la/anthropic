@@ -1,0 +1,7 @@
+pyproject.toml
+twins_anthropic_local.egg-info/PKG-INFO
+twins_anthropic_local.egg-info/SOURCES.txt
+twins_anthropic_local.egg-info/dependency_links.txt
+twins_anthropic_local.egg-info/entry_points.txt
+twins_anthropic_local.egg-info/requires.txt
+twins_anthropic_local.egg-info/top_level.txt
