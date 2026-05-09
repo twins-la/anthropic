@@ -13,6 +13,7 @@ from flask import Flask, g
 from twins_local.logs import install_correlation_id
 
 from .explainer import explainer_bp
+from .routes.api_data import api_data_bp
 from .routes.count_tokens import count_tokens_bp
 from .routes.messages import messages_bp
 from .routes.models import models_bp
@@ -66,6 +67,9 @@ def create_app(
     app.register_blueprint(models_bp)
     app.register_blueprint(twin_plane_bp)
     app.register_blueprint(explainer_bp)
+    # Catch-all for unimplemented /v1/<rest> paths — registered LAST so
+    # specific routes take precedence. Closes twins-la/twins-la#2.
+    app.register_blueprint(api_data_bp)
 
     logger.info(
         "Anthropic twin created — base_url=%s cloud=%s", base_url, is_cloud
