@@ -16,7 +16,29 @@ from typing import Optional
 
 
 class TwinStorage(ABC):
-    """Storage backend contract that hosts must implement."""
+    """Storage backend contract that hosts must implement.
+
+    Concurrency contract — read-then-write semantics:
+        If a future resource needs "load existing or create new" behavior
+        (e.g., a per-tenant signing keypair), do NOT split the operation
+        into separate `get_<x>` and `put_<x>` storage methods invoked from
+        the caller. The window between the unlocked SELECT and the put is
+        enough for two concurrent first-time callers to both observe "no
+        key" and both generate, producing transient duplicate state.
+
+        Define a single atomic `get_or_create_<x>(self, key, generator)`
+        storage method that holds `self._lock` across the entire
+        check-and-create (SQLite) or `pg_advisory_xact_lock(hashtext(...))`
+        within a single transaction (Postgres).
+
+        See twins-la/aoai#2 + twins-la/microsoft-bot-framework#2 for the
+        canonical implementation; twins-la/anthropic#1 documents the
+        audit that confirmed this twin currently has no get-then-put
+        primitive to fix. The forward-looking guard is enforced by
+        tests/smoke/test_storage_contract.py — adding `get_signing_key`
+        or `put_signing_key` without `get_or_create_signing_key` fails
+        the test suite.
+    """
 
     # -- API keys --
 
