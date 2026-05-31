@@ -46,6 +46,9 @@ def create_app(
     is_cloud = bool(config.get("is_cloud", False))
 
     app = Flask(__name__)
+    # Cap request body size so a tenant cannot fill shared disk/memory by
+    # submitting arbitrarily large payloads (Flask returns 413 pre-dispatch).
+    app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1 MB
     app.config["TWIN_STORAGE"] = storage
     app.config["TWIN_TENANTS"] = tenants
     app.config["TWIN_BASE_URL"] = base_url

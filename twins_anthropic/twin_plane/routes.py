@@ -9,6 +9,7 @@ Public endpoints (``health``, ``scenarios``, ``references``, ``settings``,
 else requires tenant or operator-admin auth.
 """
 
+import json
 import logging
 
 from flask import Blueprint, Response, g, jsonify, request
@@ -138,6 +139,8 @@ def agent_instructions_endpoint():
 def create_tenant():
     payload = request.get_json(silent=True) or {}
     friendly_name = payload.get("friendly_name", "") if isinstance(payload, dict) else ""
+    if isinstance(friendly_name, str) and len(friendly_name) > 256:
+        return plane_error("'friendly_name' must be ≤ 256 characters", 400)
 
     tenant_id = generate_tenant_id()
     if g.is_cloud:
@@ -176,8 +179,8 @@ def create_tenant():
 @twin_plane_bp.route("/logs", methods=["GET"])
 @require_tenant_or_admin
 def list_logs():
-    limit = request.args.get("limit", 100, type=int)
-    offset = request.args.get("offset", 0, type=int)
+    limit = max(1, min(request.args.get("limit", 100, type=int), 1000))
+    offset = max(0, request.args.get("offset", 0, type=int))
     tenant_id = None if g.is_admin else g.tenant_id
     entries = g.storage.list_logs(limit=limit, offset=offset, tenant_id=tenant_id)
     return jsonify({"logs": entries, "limit": limit, "offset": offset})
@@ -208,13 +211,17 @@ def create_account():
             f"Unknown account kind {kind!r}; only 'api_key' is supported", 400
         )
 
+    friendly_name = payload.get("friendly_name", "")
+    if isinstance(friendly_name, str) and len(friendly_name) > 256:
+        return plane_error("'friendly_name' must be ≤ 256 characters", 400)
+
     api_key = generate_api_key()
     key_id = generate_api_key_id()
     row = g.storage.create_api_key(
         tenant_id=g.tenant_id,
         key_id=key_id,
         key_hash=hash_api_key(api_key),
-        friendly_name=payload.get("friendly_name", ""),
+        friendly_name=friendly_name,
     )
     emit(
         g.storage,
@@ -244,7 +251,7 @@ def list_accounts():
 @require_tenant_or_admin
 def list_messages():
     """List the (request, response) history for the calling tenant."""
-    limit = request.args.get("limit", 100, type=int)
+    limit = max(1, min(request.args.get("limit", 100, type=int), 1000))
     tenant_filter = None if g.is_admin else g.tenant_id
     rows = g.storage.list_messages(tenant_id=tenant_filter, limit=limit)
     return jsonify({"messages": rows, "limit": limit})
@@ -260,6 +267,16 @@ def submit_feedback():
     body = payload.get("body")
     if not body or not isinstance(body, str) or not body.strip():
         return plane_error("'body' is required", 400)
+    if len(body.strip()) > 8192:
+        return plane_error("'body' must be ≤ 8192 characters", 400)
+
+    category = payload.get("category", "")
+    if isinstance(category, str) and len(category) > 128:
+        return plane_error("'category' must be ≤ 128 characters", 400)
+
+    context = payload.get("context", {})
+    if len(json.dumps(context)) > 4096:
+        return plane_error("'context' must serialize to ≤ 4096 bytes", 400)
 
     feedback_id = generate_feedback_id()
     now = now_iso_z()
@@ -268,8 +285,8 @@ def submit_feedback():
             "id": feedback_id,
             "tenant_id": g.tenant_id,
             "body": body.strip(),
-            "category": payload.get("category", ""),
-            "context": payload.get("context", {}),
+            "category": category,
+            "context": context,
             "status": "pending",
             "date_created": now,
             "date_updated": now,
