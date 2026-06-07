@@ -1,2 +1,0 @@
-[console_scripts]
-twins-anthropic-local = twins_anthropic_local.host:main
